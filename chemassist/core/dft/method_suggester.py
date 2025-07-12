@@ -1,44 +1,106 @@
 from __future__ import annotations
 
-import streamlit as st
+"""SMILES → DFT recommendation engine.
 
-from chemassist.core.dft.input_creator import JobSpec, build_input
-from chemassist.core.dft.method_suggester import recommend
+Pure-Python heuristics, no self-import. Safe to import from any module.
+"""
 
-# ───────────────────────────────────────────────────────────────────────────────
-# Streamlit page – fully automatic SMILES → .gjf
-# ───────────────────────────────────────────────────────────────────────────────
+from dataclasses import dataclass
+from rdkit import Chem
+from rdkit.Chem import AllChem, PeriodicTable, rdMolDescriptors
 
-def show_page() -> None:  # noqa: D401
-    st.header("🧬 SMILES-only DFT Input Creator")
-    st.write("Enter a SMILES string; ChemAssist picks a method, basis, and builds a ready-to-run Gaussian input file.")
+PT = PeriodicTable.GetPeriodicTable()
 
-    smiles = st.text_input("SMILES", placeholder="C1=CC=CC=C1 (benzene)")
 
-    if st.button("Generate .gjf", disabled=not smiles):
-        try:
-            suggestion = recommend(smiles)
-            st.success(
-                f"**Chosen:** {suggestion.method} / {suggestion.basis}  \n"
-                f"*Reason:* {suggestion.reason}  \n"
-                f"*Charge:* {suggestion.charge}, *Multiplicity:* {suggestion.multiplicity}"
-            )
+@dataclass
+class Suggestion:
+    smiles: str
+    method: str
+    basis: str
+    reason: str
+    charge: int
+    multiplicity: int
+    xyz: str  # Cartesian coordinates block
 
-            spec = JobSpec(
-                title=f"Auto-generated for {smiles}",
-                charge=suggestion.charge,
-                multiplicity=suggestion.multiplicity,
-                method=suggestion.method,
-                basis=suggestion.basis,
-                coords=suggestion.xyz,
-            )
-            gjf_text = build_input(spec)
-            st.code(gjf_text, language="text")
-            st.download_button(
-                label="💾 Download .gjf",
-                data=gjf_text.encode(),
-                file_name=f"{smiles.replace('/', '_')}.gjf",
-                mime="text/plain",
-            )
-        except Exception as exc:  # noqa: BLE001
-            st.error(f"Failed to generate input: {exc}")
+
+# ───────────────────────────────────────────────────────────────
+# Helper functions
+# ───────────────────────────────────────────────────────────────
+
+def _embed_xyz(mol: Chem.Mol) -> str:
+    mol = Chem.AddHs(mol)
+    if AllChem.EmbedMolecule(mol, AllChem.ETKDG()) != 0:
+        raise ValueError("RDKit 3-D embedding failed.")
+    AllChem.UFFOptimizeMolecule(mol)
+    conf = mol.GetConformer()
+    lines = [
+        f"{atom.GetSymbol():2} {conf.GetAtomPosition(i).x:>10.5f} {conf.GetAtomPosition(i).y:>10.5f} {conf.GetAtomPosition(i).z:>10.5f}"
+        for i, atom in enumerate(mol.GetAtoms())
+    ]
+    return "\n".join(lines)
+
+
+def _contains_metal(mol: Chem.Mol) -> bool:
+    return any(PT.GetElement(a.GetAtomicNum()).IsMetal for a in mol.GetAtoms())
+
+
+def _contains_halogen(mol: Chem.Mol) -> bool:
+    return any(a.GetAtomicNum() in {9, 17, 35, 53, 85} for a in mol.GetAtoms())
+
+
+def _electron_count(mol: Chem.Mol, charge: int) -> int:
+    return sum(a.GetAtomicNum() for a in mol.GetAtoms()) - charge
+
+
+# ───────────────────────────────────────────────────────────────
+# Public API
+# ───────────────────────────────────────────────────────────────
+
+def recommend(smiles: str) -> Suggestion:  # noqa: D401
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError("Invalid SMILES string.")
+
+    heavy = rdMolDescriptors.CalcNumHeavyAtoms(mol)
+    metal = _contains_metal(mol)
+    hal   = _contains_halogen(mol)
+
+    charge = Chem.GetFormalCharge(mol)
+    mult   = 1 if _electron_count(mol, charge) % 2 == 0 else 2
+
+    if metal:
+        method, basis, reason = (
+            "PBE0",
+            "def2-TZVP",
+            "Molecule contains a metal – hybrid GGA plus def2 basis is a robust starting combo.",
+        )
+    elif heavy > 50:
+        method, basis, reason = (
+            "ωB97X-D",
+            "def2-SVP",
+            "Large system (>50 heavy atoms); range-separated functional with moderate basis to control cost.",
+        )
+    elif hal:
+        method, basis, reason = (
+            "B3LYP-D3(BJ)",
+            "6-311+G(d,p)",
+            "Halogen atoms present; diffuse & polarization functions recommended.",
+        )
+    else:
+        method, basis, reason = (
+            "B3LYP",
+            "6-31G(d)",
+            "Medium organic molecule; classic hybrid functional + split-valence basis.",
+        )
+
+    xyz = _embed_xyz(mol)
+
+    return Suggestion(
+        smiles=smiles,
+        method=method,
+        basis=basis,
+        reason=reason,
+        charge=charge,
+        multiplicity=mult,
+        xyz=xyz,
+    )
