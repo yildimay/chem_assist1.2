@@ -109,3 +109,16 @@ def recommend(smiles: str) -> Suggestion:          #  ←  THIS is the symbol UI
         multiplicity=multiplicity,
         xyz=xyz,
     )
+def _embed_with_translation(mol, spacing=10.0):
+    frags = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
+    coords_lines = []
+    shift = 0.0
+    for frag in frags:
+        xyz = _embed_xyz(frag)              # current helper
+        for line in xyz.splitlines():
+            el, x, y, z = line.split()
+            coords_lines.append(
+                f\"{el} {float(x)+shift:>10.5f} {float(y):>10.5f} {float(z):>10.5f}\"
+            )
+        shift += spacing
+    return \"\\n\".join(coords_lines)
