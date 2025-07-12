@@ -16,8 +16,8 @@ Pillow==10.3.0              # image handling (wheel exists for py3.11)
 Jinja2==3.1.4               # templating
 
 # ── Data science stack ───────────────
-numpy==2.3.1
-pandas==2.3.1
+numpy==1.26.4          # compatible with rdkit & sklearn wheels
+pandas==2.2.3          # last pandas version built against numpy 1.x
 scikit-learn==1.5.0         # optional ML helpers
 
 # ── LLM & API clients ────────────────
