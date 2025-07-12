@@ -13,7 +13,7 @@ rdkit==2025.3.3          # most recent wheel (cp310 / cp311)          # official
 PubChemPy==1.0.4
 pytesseract==0.3.13       # latest on PyPI       # OCR for screenshot error parsing
 PyMuPDF==1.24.2           # fast PDF text extraction
-Pillow==10.3.0            # image handling
+Pillow==10.2.0            # pin to last wheel-only release to avoid source build            # image handling
 Jinja2==3.1.4             # input-file templating
 
 # ── Data science stack ───────────────
