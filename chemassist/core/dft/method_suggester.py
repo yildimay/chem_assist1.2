@@ -2,14 +2,18 @@ from __future__ import annotations
 
 """SMILES → DFT recommendation engine.
 
-Pure-Python heuristics, no self-import. Safe to import from any module.
+Pure‑Python heuristics, no self‑import. Safe to import from any module.
 """
 
 from dataclasses import dataclass
 from rdkit import Chem
-from rdkit.Chem import AllChem, PeriodicTable, rdMolDescriptors
+from rdkit.Chem import AllChem, rdMolDescriptors
 
-PT = PeriodicTable.GetPeriodicTable()
+METALS = {\
+    3,4,11,12,13,19,20,21,22,23,24,25,26,27,28,29,30,\
+    31,37,38,39,40,41,42,43,44,45,46,47,48,49,50,55,56,57,\
+    *range(58,72),*range(72,81),*range(81,84),*range(84,88),*range(89,104),*range(104,119)\
+}
 
 
 @dataclass
@@ -30,7 +34,7 @@ class Suggestion:
 def _embed_xyz(mol: Chem.Mol) -> str:
     mol = Chem.AddHs(mol)
     if AllChem.EmbedMolecule(mol, AllChem.ETKDG()) != 0:
-        raise ValueError("RDKit 3-D embedding failed.")
+        raise ValueError("RDKit 3‑D embedding failed.")
     AllChem.UFFOptimizeMolecule(mol)
     conf = mol.GetConformer()
     lines = [
@@ -41,66 +45,4 @@ def _embed_xyz(mol: Chem.Mol) -> str:
 
 
 def _contains_metal(mol: Chem.Mol) -> bool:
-    return any(PT.GetElement(a.GetAtomicNum()).IsMetal for a in mol.GetAtoms())
-
-
-def _contains_halogen(mol: Chem.Mol) -> bool:
-    return any(a.GetAtomicNum() in {9, 17, 35, 53, 85} for a in mol.GetAtoms())
-
-
-def _electron_count(mol: Chem.Mol, charge: int) -> int:
-    return sum(a.GetAtomicNum() for a in mol.GetAtoms()) - charge
-
-
-# ───────────────────────────────────────────────────────────────
-# Public API
-# ───────────────────────────────────────────────────────────────
-
-def recommend(smiles: str) -> Suggestion:  # noqa: D401
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        raise ValueError("Invalid SMILES string.")
-
-    heavy = rdMolDescriptors.CalcNumHeavyAtoms(mol)
-    metal = _contains_metal(mol)
-    hal   = _contains_halogen(mol)
-
-    charge = Chem.GetFormalCharge(mol)
-    mult   = 1 if _electron_count(mol, charge) % 2 == 0 else 2
-
-    if metal:
-        method, basis, reason = (
-            "PBE0",
-            "def2-TZVP",
-            "Molecule contains a metal – hybrid GGA plus def2 basis is a robust starting combo.",
-        )
-    elif heavy > 50:
-        method, basis, reason = (
-            "ωB97X-D",
-            "def2-SVP",
-            "Large system (>50 heavy atoms); range-separated functional with moderate basis to control cost.",
-        )
-    elif hal:
-        method, basis, reason = (
-            "B3LYP-D3(BJ)",
-            "6-311+G(d,p)",
-            "Halogen atoms present; diffuse & polarization functions recommended.",
-        )
-    else:
-        method, basis, reason = (
-            "B3LYP",
-            "6-31G(d)",
-            "Medium organic molecule; classic hybrid functional + split-valence basis.",
-        )
-
-    xyz = _embed_xyz(mol)
-
-    return Suggestion(
-        smiles=smiles,
-        method=method,
-        basis=basis,
-        reason=reason,
-        charge=charge,
-        multiplicity=mult,
-        xyz=xyz,
-    )
+    return any(a.GetAtomicNum() in METALS for a in mol.GetAtoms())
