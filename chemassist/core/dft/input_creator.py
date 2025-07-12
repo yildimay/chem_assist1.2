@@ -1,108 +1,147 @@
 from __future__ import annotations
 
-"""Minimal, program-agnostic DFT input builder.
+"""SMILES ➜ heuristic DFT recommendation engine.
 
-Right now only **Gaussian** is implemented so we can ship a working demo.
-Other engines (ORCA, NWChem, CP2K…) can be added by dropping a Jinja2
-Template into `_TEMPLATES` and extending `build_input()`.
+*  Embeds **each fragment** separately. If RDKit's ETKDG fails (common for
+   metal complexes), falls back to CoordGen plus a simple ±1 Å z-lift to
+   avoid planar collapse – the "old-fashioned" but robust route.
+*  Subsequent fragments are translated along +x so dot-separated salts
+   never overlap.
 """
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from textwrap import dedent
-from typing import Any, Dict
+from dataclasses import dataclass
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Data model
-# ──────────────────────────────────────────────────────────────────────────────
+from rdkit import Chem
+from rdkit.Chem import AllChem, rdMolDescriptors, rdCoordGen
+
+# ───────────────────────────────────────────────────────────────
+# Dataclass handed to the UI layer
+# ───────────────────────────────────────────────────────────────
+
 
 @dataclass
-class JobSpec:
-    """Container for misc. input-file parameters."""
+class Suggestion:
+    smiles: str
+    method: str
+    basis: str
+    reason: str
+    charge: int
+    multiplicity: int
+    xyz: str  # Cartesian coordinates (Å)
 
-    title: str = "Untitled job"
-    charge: int = 0
-    multiplicity: int = 1
-    method: str = "B3LYP"
-    basis: str = "6-31G(d)"
-    coords: str = field(
-        default_factory=lambda: dedent(
-            """
-            O    0.0000    0.0000    0.0000
-            H    0.0000    0.0000    0.9697
-            H    0.0000    0.7572   -0.4848
-            """
-        ).strip()
+
+# ───────────────────────────────────────────────────────────────
+# Helper: single-fragment embedding
+# ───────────────────────────────────────────────────────────────
+
+
+def _embed_one(mol: Chem.Mol) -> str:
+    """Try ETKDG+UFF → fallback to CoordGen with ±1 Å z jitter."""
+    m = Chem.AddHs(mol)
+    try:
+        if AllChem.EmbedMolecule(m, AllChem.ETKDG()) == 0:
+            AllChem.UFFOptimizeMolecule(m)
+        else:
+            raise ValueError("ETKDG failed")
+    except Exception:  # noqa: BLE001
+        # 2-D CoordGen then manual z-lift
+        rdCoordGen.AddCoords(m)
+        conf = m.GetConformer()
+        for i in range(m.GetNumAtoms()):
+            pos = conf.GetAtomPosition(i)
+            pos.z = 1.0 if i % 2 else -1.0
+            conf.SetAtomPosition(i, pos)
+    conf = m.GetConformer()
+    return "\n".join(
+        f"{a.GetSymbol():2} {conf.GetAtomPosition(i).x:>10.5f} "
+        f"{conf.GetAtomPosition(i).y:>10.5f} {conf.GetAtomPosition(i).z:>10.5f}"
+        for i, a in enumerate(m.GetAtoms())
     )
-    extra_options: str | None = None  # raw text appended after the card
-
-    def to_dict(self) -> Dict[str, Any]:  # convenience for Jinja2
-        return self.__dict__
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Templates
-# ──────────────────────────────────────────────────────────────────────────────
+def _embed_with_translation(mol: Chem.Mol, spacing: float = 10.0) -> str:
+    """Embed each disconnected fragment and shift along x-axis."""
+    frags = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
+    lines, offset = [], 0.0
+    for frag in frags:
+        for line in _embed_one(frag).splitlines():
+            el, x, y, z = line.split()
+            lines.append(
+                f"{el:2} {float(x) + offset:>10.5f} {float(y):>10.5f} {float(z):>10.5f}"
+            )
+        offset += spacing
+    return "\n".join(lines)
 
-_GAUSSIAN_TEMPLATE = dedent(
-    """
-    %NProcShared=8
-    %Mem=8GB
-    # {{ method }} / {{ basis }} {{ ' '.join(opts) }}
 
-    {{ title }}
+# ───────────────────────────────────────────────────────────────
+# Heuristic method/basis picker helpers
+# ───────────────────────────────────────────────────────────────
 
-    {{ charge }} {{ multiplicity }}
-    {{ coords }}
-
-    {{ extra_options or '' }}
-    """
-).lstrip()
-
-_TEMPLATES: dict[str, str] = {
-    "gaussian": _GAUSSIAN_TEMPLATE,
-    # "orca": "…", "cp2k": "…" can be added later.
+_METALS = {
+    3, 4, 11, 12, 13,
+    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+    31, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+    55, 56, 57, *range(58, 72), *range(72, 81), 81, 82, 83,
+    *range(84, 89), *range(89, 104)
 }
+_HALOGENS = {9, 17, 35, 53, 85}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+def _contains(seq: set[int], mol: Chem.Mol) -> bool:
+    return any(a.GetAtomicNum() in seq for a in mol.GetAtoms())
+
+
+# ───────────────────────────────────────────────────────────────
 # Public API
-# ──────────────────────────────────────────────────────────────────────────────
-
-def build_input(spec: JobSpec, program: str = "gaussian") -> str:  # noqa: D401
-    """Return a ready-to-save input string for *program* using *spec* settings."""
-
-    program = program.lower()
-
-    if program not in _TEMPLATES:
-        raise ValueError(f"Program '{program}' not supported yet.")
-
-    template = _TEMPLATES[program]
-
-    # Quick inline rendering without Jinja2 to avoid template engine overhead.
-    # For more complex files we can swap to real Jinja2 later.
-    rendered = template.replace("{{ title }}", spec.title)
-    rendered = rendered.replace("{{ charge }}", str(spec.charge))
-    rendered = rendered.replace("{{ multiplicity }}", str(spec.multiplicity))
-    rendered = rendered.replace("{{ method }}", spec.method)
-    rendered = rendered.replace("{{ basis }}", spec.basis)
-
-    opts = []
-    if spec.extra_options:
-        opts.append(spec.extra_options.strip())
-    rendered = rendered.replace("{{ ' '.join(opts) }}", " ".join(opts))
-    rendered = rendered.replace("{{ coords }}", spec.coords.strip())
-    rendered = rendered.replace("{{ extra_options or '' }}", spec.extra_options or "")
-
-    # Clean double newlines introduced by missing extras
-    return "\n".join(line.rstrip() for line in rendered.splitlines()).strip() + "\n"
+# ───────────────────────────────────────────────────────────────
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Quick CLI / debug helper
-# ──────────────────────────────────────────────────────────────────────────────
+def recommend(smiles: str) -> Suggestion:  # noqa: D401
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError("Invalid SMILES string.")
 
-if __name__ == "__main__":  # pragma: no cover
-    example = JobSpec(title="Water optimisation", method="B3LYP", basis="6-31G(d,p)")
-    print(build_input(example))
+    heavy = rdMolDescriptors.CalcNumHeavyAtoms(mol)
+    has_metal = _contains(_METALS, mol)
+    has_hal = _contains(_HALOGENS, mol)
 
+    charge = Chem.GetFormalCharge(mol)
+    e_cnt = sum(a.GetAtomicNum() for a in mol.GetAtoms()) - charge
+    mult = 1 if e_cnt % 2 == 0 else 2
+
+    if has_metal:
+        method, basis, reason = (
+            "PBE0",
+            "def2-TZVP",
+            "Metal detected → PBE0 with def2 triple-ζ basis is a safe baseline.",
+        )
+    elif heavy > 50:
+        method, basis, reason = (
+            "ωB97X-D",
+            "def2-SVP",
+            "Large molecule (>50 heavy atoms) → range-separated functional with moderate basis.",
+        )
+    elif has_hal:
+        method, basis, reason = (
+            "B3LYP-D3(BJ)",
+            "6-311+G(d,p)",
+            "Halogen present → hybrid functional with diffuse & polarisation functions.",
+        )
+    else:
+        method, basis, reason = (
+            "B3LYP",
+            "6-31G(d)",
+            "Medium organic molecule → classic B3LYP and split-valence basis.",
+        )
+
+    xyz = _embed_with_translation(mol) if "." in smiles else _embed_one(mol)
+
+    return Suggestion(
+        smiles=smiles,
+        method=method,
+        basis=basis,
+        reason=reason,
+        charge=charge,
+        multiplicity=mult,
+        xyz=xyz,
+    )
