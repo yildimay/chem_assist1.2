@@ -1,9 +1,11 @@
 import importlib
 import streamlit as st
 
-# ──────────────────────────────────────────────────────────────────────────────
-# App configuration
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# ChemAssist v2 – main entry
+# This version assumes UI files live under:
+#   chemassist/ui/pages/<category>/<page>_ui.py
+# ─────────────────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="ChemAssist v2",
@@ -11,9 +13,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Sidebar – high-level navigation
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Sidebar – navigation
+# ─────────────────────────────────────────────────────────────
 
 st.sidebar.title("⚗️ ChemAssist")
 
@@ -23,15 +25,16 @@ CATEGORY = st.sidebar.radio(
     key="category",
 )
 
-# Mapping: (category, tool) → dotted import path for the corresponding Streamlit
-# UI function.  Each UI file must expose a `show_page()` entry point.
+# Mapping: (category, tool) → dotted import path
 PAGE_REGISTRY: dict[tuple[str, str], str] = {
-    ("DFT", "Input Creator"): "chemassist.ui.dft.input_creator_ui",
-    ("DFT", "Error Fixer"): "chemassist.ui.dft.error_fixer_ui",
-    ("Molecular Dynamics", "Input Creator"): "chemassist.ui.md.input_creator_ui",
-    ("Molecular Dynamics", "Error Fixer"): "chemassist.ui.md.error_fixer_ui",
-    ("Other", "Environmental Risk Calculator"): "chemassist.ui.other.env_risk_ui",
-    ("Other", "SMILES → 3D Modeler"): "chemassist.ui.other.smiles_modeler_ui",
+    ("DFT", "Input Creator"): "chemassist.ui.pages.dft.input_creator_ui",
+    ("DFT", "Error Fixer"):   "chemassist.ui.pages.dft.error_fixer_ui",
+
+    ("Molecular Dynamics", "Input Creator"): "chemassist.ui.pages.md.input_creator_ui",
+    ("Molecular Dynamics", "Error Fixer"):   "chemassist.ui.pages.md.error_fixer_ui",
+
+    ("Other", "Environmental Risk Calculator"): "chemassist.ui.pages.other.env_risk_ui",
+    ("Other", "SMILES → 3D Modeler"):           "chemassist.ui.pages.other.smiles_modeler_ui",
 }
 
 if CATEGORY == "DFT":
@@ -55,18 +58,17 @@ else:  # Other
         key="misc_tool",
     )
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Dynamic import & execution
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 module_path = PAGE_REGISTRY.get((CATEGORY, TOOL))
 
 if module_path is None:
-    st.error("Selected page is not registered (yet).")
+    st.error("Selected page is not registered yet.")
 else:
     try:
         module = importlib.import_module(module_path)
-        # All UI modules must implement `show_page()`.
         if hasattr(module, "show_page"):
             module.show_page()
         else:
@@ -76,14 +78,14 @@ else:
             )
     except ModuleNotFoundError as err:
         st.error(
-            f"Module {module_path!r} cannot be imported. Have you created the file?\n{err}"
+            f"Module {module_path!r} cannot be imported. Did you create the file?\n{err}"
         )
     except Exception as err:
         st.exception(err)
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # Footer
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 st.sidebar.markdown("---")
 st.sidebar.caption("ChemAssist v2 – AI-powered computational chemistry toolkit (free)")
