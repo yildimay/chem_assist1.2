@@ -1,6 +1,6 @@
 # ─────────────────────────────────────
 # ChemAssist v2 – runtime dependencies
-# Target interpreter: **Python 3.11** (wheels for all libs)
+# Target interpreter: **Python 3.11** (wheels for all libs)
 # ─────────────────────────────────────
 
 # ── Core UI ──────────────────────────
@@ -17,7 +17,7 @@ Jinja2==3.1.4               # templating
 
 # ── Data science stack ───────────────
 numpy==2.3.1
-pandas==3.0.1
+pandas==2.3.1
 scikit-learn==1.5.0         # optional ML helpers
 
 # ── LLM & API clients ────────────────
