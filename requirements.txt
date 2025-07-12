@@ -1,6 +1,6 @@
 # ─────────────────────────────────────
 # ChemAssist v2 – runtime dependencies
-# Requires **Python 3.10 or 3.11** (RDKit wheels are not yet built for 3.12).
+# Requires **Python 3.10 or 3.11** (RDKit wheels are not yet built for 3.12).
 # Pin exact versions for reproducibility.
 # ─────────────────────────────────────
 
@@ -9,7 +9,7 @@ streamlit==1.34.0
 streamlit-extras==0.4.0
 
 # ── Chemistry & modelling libs ───────
-rdkit==2024.03.1          # official wheels on PyPI (cp310, cp311)
+rdkit==2025.3.3          # most recent wheel (cp310 / cp311)          # official wheels on PyPI (cp310, cp311)
 PubChemPy==1.0.4
 pytesseract==0.3.12       # OCR for screenshot error parsing
 PyMuPDF==1.24.2           # fast PDF text extraction
@@ -19,7 +19,7 @@ Jinja2==3.1.4             # input-file templating
 # ── Data science stack ───────────────
 numpy==1.28.2
 pandas==3.0.1
-scikit-learn==1.5.0       # optional, for future ML add-ons
+scikit-learn==1.5.0       # optional, for future ML add‑ons
 
 # ── LLM & API clients ────────────────
 groq==0.3.0               # GroqCloud SDK
