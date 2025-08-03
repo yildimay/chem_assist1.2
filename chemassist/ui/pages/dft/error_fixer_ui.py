@@ -39,23 +39,61 @@ def show_page() -> None:  # noqa: D401
 
     program = st.selectbox("Program", ["Gaussian"], index=0, disabled=True)
 
-    if st.button("🩹 Diagnose & Fix", disabled=not (input_file and log_file)):
-        try:
-            result = fix_input(
-                input_text=input_file.read().decode("utf-8", "replace"),
-                log_text=log_file.read().decode("utf-8", "replace"),
-                program="gaussian",
-            )
-            st.subheader("Diagnosis")
-            st.info(result["diagnosis"] or "(LLM returned no explanation)")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        diagnose_button = st.button("🩹 Diagnose & Fix", disabled=not (input_file and log_file))
+    with col2:
+        retry_button = st.button("🔄 Retry with different format", disabled=not (input_file and log_file))
+    
+    if diagnose_button or retry_button:
+        with st.spinner("🤖 AI is analyzing your error..."):
+            try:
+                # Reset file pointers
+                input_file.seek(0)
+                log_file.seek(0)
+                
+                result = fix_input(
+                    input_text=input_file.read().decode("utf-8", "replace"),
+                    log_text=log_file.read().decode("utf-8", "replace"),
+                    program="gaussian",
+                )
+                
+                st.subheader("✅ Diagnosis")
+                st.info(result["diagnosis"] or "(LLM returned no explanation)")
 
-            st.subheader("Corrected input")
-            st.code(result["fixed_input"], language="text")
-            st.download_button(
-                label="💾 Download fixed .gjf",
-                data=result["fixed_input"].encode(),
-                file_name="fixed_input.gjf",
-                mime="text/plain",
-            )
-        except Exception as exc:  # noqa: BLE001
-            st.error(f"Failed to fix input: {exc}")
+                st.subheader("✅ Corrected input")
+                st.code(result["fixed_input"], language="text")
+                st.download_button(
+                    label="💾 Download fixed .gjf",
+                    data=result["fixed_input"].encode(),
+                    file_name="fixed_input.gjf",
+                    mime="text/plain",
+                )
+                
+                st.success("🎉 Error analysis complete!")
+                
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"❌ Failed to fix input: {exc}")
+                
+                # Show helpful troubleshooting tips
+                with st.expander("🔧 Troubleshooting Tips", expanded=True):
+                    st.markdown("""
+                    **Common issues and solutions:**
+                    
+                    1. **"LLM did not return a FIXED_INPUT block"**
+                       - Try the "Retry with different format" button
+                       - Check that your input file is a valid Gaussian input
+                       - Make sure your log file contains error messages
+                    
+                    2. **"Invalid API Key"**
+                       - Make sure you're running with: `./launch.sh YOUR_API_KEY`
+                       - Get a free API key from: https://console.groq.com/
+                    
+                    3. **"No response from LLM"**
+                       - Check your internet connection
+                       - Try again in a few moments
+                    
+                    4. **Still having issues?**
+                       - Try uploading a smaller log file (just the error part)
+                       - Make sure your input file is complete
+                    """)

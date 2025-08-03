@@ -22,9 +22,10 @@ _SYSTEM_PROMPT = (
     "Tasks:\n"
     "1. Diagnose the root cause (<100 words).\n"
     "2. Provide a corrected input that should run.\n"
-    "Return exactly two fenced blocks:\n"
-    "```DIAGNOSIS\n<one paragraph>\n```\n"
-    "```FIXED_INPUT\n<full corrected input>\n```"
+    "IMPORTANT: You must return exactly two fenced blocks in this exact format:\n"
+    "```DIAGNOSIS\n<diagnosis text here>\n```\n"
+    "```FIXED_INPUT\n<complete corrected input file here>\n```\n"
+    "Do not include any other text outside these blocks."
 )
 
 
@@ -56,6 +57,10 @@ def fix_input(
 
     diagnosis, fixed = "", ""
     mode = None
+    
+    # Debug logging
+    LOGGER.info(f"Parsing LLM response (length: {len(response)})")
+    
     for line in response.splitlines():
         if line.startswith("```DIAGNOSIS"):
             mode = "d"
@@ -71,7 +76,30 @@ def fix_input(
         elif mode == "f":
             fixed += line + "\n"
 
+    # More detailed error handling
     if not fixed.strip():
-        raise RuntimeError("LLM did not return a FIXED_INPUT block.")
+        LOGGER.error(f"Failed to parse LLM response. Response was:\n{response}")
+        
+        # Try fallback parsing for different formats
+        if "```" in response:
+            # Try to extract any code blocks
+            import re
+            code_blocks = re.findall(r'```(?:.*?)\n(.*?)```', response, re.DOTALL)
+            if code_blocks:
+                LOGGER.info(f"Found {len(code_blocks)} code blocks, using last one as FIXED_INPUT")
+                fixed = code_blocks[-1]
+                diagnosis = "Auto-extracted from LLM response (format parsing failed)"
+            else:
+                raise RuntimeError(
+                    f"LLM did not return a FIXED_INPUT block. "
+                    f"Response length: {len(response)} characters. "
+                    f"Please try again or check the input format."
+                )
+        else:
+            raise RuntimeError(
+                f"LLM did not return a FIXED_INPUT block. "
+                f"Response length: {len(response)} characters. "
+                f"Please try again or check the input format."
+            )
 
     return {"diagnosis": diagnosis.strip(), "fixed_input": fixed.rstrip() + "\n"}

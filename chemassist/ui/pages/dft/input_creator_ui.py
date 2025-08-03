@@ -15,6 +15,7 @@ import streamlit as st
 from chemassist.core.dft.input_creator import JobSpec, build_input
 from chemassist.core.dft.pdf_methods import extract as extract_methods
 from chemassist.core.dft.method_suggester import recommend
+from chemassist.utils.file_io import create_dft_zip_archive
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Utilities
@@ -131,9 +132,27 @@ def show_page() -> None:  # noqa: D401
         )
         gjf = build_input(final)
         st.code(gjf)
-        st.download_button(
-            "💾 Download .gjf",
-            data=gjf.encode(),
-            file_name=f"{title.replace(' ', '_')}.gjf",
-            mime="text/plain",
-        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "💾 Download .gjf",
+                data=gjf.encode(),
+                file_name=f"{title.replace(' ', '_')}.gjf",
+                mime="text/plain",
+            )
+        
+        with col2:
+            try:
+                zip_data = create_dft_zip_archive(final, build_input)
+                zip_filename = f"{title.replace(' ', '_')}_dft_files.zip"
+                
+                st.download_button(
+                    "📦 Download ZIP",
+                    data=zip_data,
+                    file_name=zip_filename,
+                    mime="application/zip",
+                    help="Download input file with README"
+                )
+            except Exception as e:
+                st.error(f"Failed to create ZIP: {e}")

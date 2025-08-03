@@ -1,5 +1,10 @@
 import importlib
 import streamlit as st
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ─────────────────────────────────────────────────────────────
 # ChemAssist v2 – main entry
@@ -18,6 +23,17 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────
 
 st.sidebar.title("⚗️ ChemAssist")
+
+# Check for API keys and show helpful message
+if not os.environ.get("GROQ_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+    st.sidebar.warning(
+        "⚠️ **LLM features disabled**\n\n"
+        "To use error fixing and AI features, add your API key:\n\n"
+        "**Option 1:** Edit `.env` file\n"
+        "**Option 2:** Set environment variable:\n"
+        "```bash\nexport GROQ_API_KEY='your_key_here'\n```\n\n"
+        "Get free API key: https://console.groq.com/"
+    )
 
 CATEGORY = st.sidebar.radio(
     "Tool category",
