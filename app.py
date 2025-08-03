@@ -1,10 +1,9 @@
 import importlib
 import streamlit as st
-from dotenv import load_dotenv
 import os
 
-# Load environment variables from .env file
-load_dotenv()
+# Environment variables are loaded from Streamlit's environment
+# No need for .env file loading
 
 # ─────────────────────────────────────────────────────────────
 # ChemAssist v2 – main entry
@@ -28,9 +27,9 @@ st.sidebar.title("⚗️ ChemAssist")
 if not os.environ.get("GROQ_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
     st.sidebar.warning(
         "⚠️ **LLM features disabled**\n\n"
-        "To use error fixing and AI features, add your API key:\n\n"
-        "**Option 1:** Edit `.env` file\n"
-        "**Option 2:** Set environment variable:\n"
+        "To use error fixing and AI features, set your API key in Streamlit:\n\n"
+        "**Streamlit Cloud:** Add to secrets.toml\n"
+        "**Local:** Set environment variable:\n"
         "```bash\nexport GROQ_API_KEY='your_key_here'\n```\n\n"
         "Get free API key: https://console.groq.com/"
     )

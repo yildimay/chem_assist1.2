@@ -10,33 +10,20 @@ AI-powered computational chemistry toolkit for DFT, Molecular Dynamics, and more
    ```
 
 2. **Set up API key (for AI features):**
+   
+   **Option A: Environment variable (recommended):**
    ```bash
-   python3 setup_api_key.py
+   export GROQ_API_KEY="your_api_key_here"
    ```
-   Or manually edit the `.env` file:
-   ```bash
-   echo "GROQ_API_KEY=your_api_key_here" > .env
+   
+   **Option B: Streamlit secrets (for Streamlit Cloud):**
+   Create `.streamlit/secrets.toml`:
+   ```toml
+   GROQ_API_KEY = "your_api_key_here"
    ```
 
 3. **Run the application:**
-   
-   **Option A: Easy launcher (recommended):**
    ```bash
-   # Without API key (basic features only)
-   ./launch.sh
-   
-   # With API key (full AI features)
-   ./launch.sh YOUR_API_KEY
-   ```
-   
-   **Option B: Python script:**
-   ```bash
-   python3 run_with_key.py YOUR_API_KEY
-   ```
-   
-   **Option C: Manual run:**
-   ```bash
-   export PATH="/Users/yildiray/Library/Python/3.9/bin:$PATH"
    streamlit run app.py
    ```
 
@@ -46,27 +33,25 @@ ChemAssist uses AI to help fix computational chemistry errors and suggest method
 
 ### Quick Setup (Recommended)
 1. Get a free API key from [Groq Console](https://console.groq.com/)
-2. Run: `python3 run_with_key.py YOUR_API_KEY`
-3. That's it! The app will start with your API key set.
+2. Set environment variable: `export GROQ_API_KEY="your_api_key_here"`
+3. Run: `streamlit run app.py`
 
 ### Option 1: Groq (Recommended - Free Tier)
 1. Visit [https://console.groq.com/](https://console.groq.com/)
 2. Sign up for a free account
 3. Get your API key from the dashboard
-4. Run: `python3 setup_api_key.py` and choose option 1
+4. Set as environment variable: `export GROQ_API_KEY="your_key"`
 
 ### Option 2: OpenAI
 1. Visit [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 2. Create an account and get an API key
-3. Run: `python3 setup_api_key.py` and choose option 2
+3. Set as environment variable: `export OPENAI_API_KEY="your_key"`
 
-### Option 3: Manual Setup
-Create a `.env` file in the project root:
-```bash
-GROQ_API_KEY=your_groq_api_key_here
-# or
-OPENAI_API_KEY=your_openai_api_key_here
-```
+### Option 3: Streamlit Cloud Deployment
+1. Deploy to Streamlit Cloud
+2. Add secrets in the Streamlit Cloud dashboard:
+   - Go to your app settings
+   - Add `GROQ_API_KEY` or `OPENAI_API_KEY` in the secrets section
 
 ## 🛠️ Features
 
@@ -87,10 +72,12 @@ OPENAI_API_KEY=your_openai_api_key_here
 - The app will show a warning in the sidebar if no API key is configured
 - Non-AI features (like input creation from templates) work without API keys
 - Error fixing and AI suggestions require valid API keys
+- Environment variables are preferred over .env files for better deployment
 
 ## 🔧 Troubleshooting
 
 If you see "No LLM API key found" error:
 1. Make sure you have a valid API key
-2. Check that the `.env` file exists and contains your key
-3. Restart the Streamlit app after adding the key 
+2. Check that the environment variable is set: `echo $GROQ_API_KEY`
+3. For Streamlit Cloud, verify secrets are configured in the dashboard
+4. Restart the Streamlit app after setting the key 

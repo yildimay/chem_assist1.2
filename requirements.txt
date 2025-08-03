@@ -26,7 +26,7 @@ openai==1.30.0
 tiktoken==0.6.0
 
 # ── Utilities ────────────────────────
-python-dotenv==1.0.1
+# python-dotenv removed - using Streamlit environment variables instead
 
 # ─────────────────────────────────────
 # Development extras go in `dev-requirements.txt`.
