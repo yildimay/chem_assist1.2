@@ -48,7 +48,30 @@ def _display_3d_interactive(html_content: str, title: str) -> None:
     """Display interactive 3D HTML content in Streamlit."""
     if html_content:
         st.markdown(f"**{title}**")
-        st.components.html(html_content, height=450, scrolling=False)
+        
+        # Create a temporary HTML file and display it
+        import tempfile
+        import base64
+        
+        try:
+            # Encode HTML content for iframe
+            html_encoded = base64.b64encode(html_content.encode()).decode()
+            
+            # Display using iframe with data URI
+            st.markdown(f"""
+            <iframe src="data:text/html;base64,{html_encoded}" 
+                    width="100%" height="450" frameborder="0" 
+                    style="border: 1px solid #ddd; border-radius: 5px;">
+            </iframe>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("*💡 **Tip:** Drag to rotate, scroll to zoom, right-click for more options*")
+            
+        except Exception as e:
+            st.error(f"Failed to display 3D viewer: {e}")
+            # Fallback to static 3D SVG
+            st.markdown("**Fallback: Static 3D Structure**")
+            st.markdown(html_content, unsafe_allow_html=True)
     else:
         st.warning(f"No interactive {title.lower()} available")
 

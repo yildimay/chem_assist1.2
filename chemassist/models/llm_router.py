@@ -31,12 +31,22 @@ def _call_groq(model: str, messages: List[Dict[str, str]], system_prompt: str | 
     if groq is None:
         raise RuntimeError("groq python package is not installed – add it to requirements.txt")
 
-    client = groq.Groq(api_key=os.environ["GROQ_API_KEY"])
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": system_prompt or ""}] + messages,
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        # Try the newer Groq client API
+        client = groq.Groq(api_key=os.environ["GROQ_API_KEY"])
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_prompt or ""}] + messages,
+        )
+        return response.choices[0].message.content.strip()
+    except AttributeError:
+        # Fallback for older Groq versions
+        groq.api_key = os.environ["GROQ_API_KEY"]
+        response = groq.ChatCompletion.create(
+            model=model,
+            messages=[{"role": "system", "content": system_prompt or ""}] + messages,
+        )
+        return response.choices[0].message.content.strip()
 
 
 def _call_openai(model: str, messages: List[Dict[str, str]], system_prompt: str | None) -> str:  # noqa: D401
@@ -73,7 +83,30 @@ def call_llm(
                 openai_key = st.secrets.get("OPENAI_API_KEY")
         except Exception as e:
             # Streamlit secrets not available or not configured
-            pass
+            # Try alternative paths for deployment platforms
+            try:
+                import toml
+                # Try common secrets file paths
+                secrets_paths = [
+                    ".streamlit/secrets.toml",
+                    "/opt/render/.streamlit/secrets.toml",
+                    "/opt/render/project/src/.streamlit/secrets.toml"
+                ]
+                
+                for path in secrets_paths:
+                    try:
+                        if os.path.exists(path):
+                            with open(path, 'r') as f:
+                                secrets = toml.load(f)
+                                if not groq_key:
+                                    groq_key = secrets.get("GROQ_API_KEY")
+                                if not openai_key:
+                                    openai_key = secrets.get("OPENAI_API_KEY")
+                                break
+                    except Exception:
+                        continue
+            except ImportError:
+                pass  # toml not available
     
     if groq_key:
         # Temporarily set the environment variable for the API call

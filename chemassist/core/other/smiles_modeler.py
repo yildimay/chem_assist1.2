@@ -108,26 +108,30 @@ class SmilesModeler:
     <title>3D Molecular Structure</title>
     <script src="https://unpkg.com/ngl@0.10.4/dist/ngl.js"></script>
     <style>
-        body { margin: 0; padding: 0; }
-        #viewport { width: 100%; height: 400px; }
+        body {{ margin: 0; padding: 0; background-color: white; }}
+        #viewport {{ width: 100%; height: 400px; }}
     </style>
 </head>
 <body>
     <div id="viewport"></div>
     <script>
-        var stage = new NGL.Stage("viewport");
-        stage.setParameters({
-            backgroundColor: "white"
-        });
-        
-        var pdbData = `{pdb_content}`;
-        
-        stage.loadFile(new Blob([pdbData], {{type: "text/plain"}}), {{ext: "pdb"}}).then(function (component) {{
-            component.addRepresentation("ball+stick", {{
-                color: "element"
+        try {{
+            var stage = new NGL.Stage("viewport");
+            stage.setParameters({{
+                backgroundColor: "white"
             }});
-            component.autoView();
-        }});
+            
+            var pdbData = `{pdb_content}`;
+            
+            stage.loadFile(new Blob([pdbData], {{type: "text/plain"}}), {{ext: "pdb"}}).then(function (component) {{
+                component.addRepresentation("ball+stick", {{
+                    color: "element"
+                }});
+                component.autoView();
+            }});
+        }} catch (e) {{
+            document.getElementById("viewport").innerHTML = "<p style='color: red;'>3D viewer failed to load: " + e.message + "</p>";
+        }}
     </script>
 </body>
 </html>
