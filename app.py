@@ -44,7 +44,6 @@ CATEGORY = st.sidebar.radio(
 PAGE_REGISTRY: dict[tuple[str, str], str] = {
     ("DFT", "Input Creator"): "chemassist.ui.pages.dft.input_creator_ui",
     ("DFT", "Error Fixer"):   "chemassist.ui.pages.dft.error_fixer_ui",
-    ("DFT", "Error Fixer Chat"): "chemassist.ui.pages.dft.chat_error_fixer_ui",
 
     ("Molecular Dynamics", "Input Creator"): "chemassist.ui.pages.md.input_creator_ui",
     ("Molecular Dynamics", "Error Fixer"):   "chemassist.ui.pages.md.error_fixer_ui",
@@ -56,7 +55,7 @@ PAGE_REGISTRY: dict[tuple[str, str], str] = {
 if CATEGORY == "DFT":
     TOOL = st.sidebar.radio(
         "DFT tools",
-        ("Input Creator", "Error Fixer", "Error Fixer Chat"),
+        ("Input Creator", "Error Fixer"),
         key="dft_tool",
     )
 
