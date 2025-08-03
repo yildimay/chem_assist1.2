@@ -32,21 +32,15 @@ def _call_groq(model: str, messages: List[Dict[str, str]], system_prompt: str | 
         raise RuntimeError("groq python package is not installed – add it to requirements.txt")
 
     try:
-        # Try the newer Groq client API
+        # Use the current Groq client API
         client = groq.Groq(api_key=os.environ["GROQ_API_KEY"])
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": system_prompt or ""}] + messages,
         )
         return response.choices[0].message.content.strip()
-    except AttributeError:
-        # Fallback for older Groq versions
-        groq.api_key = os.environ["GROQ_API_KEY"]
-        response = groq.ChatCompletion.create(
-            model=model,
-            messages=[{"role": "system", "content": system_prompt or ""}] + messages,
-        )
-        return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise RuntimeError(f"Groq API call failed: {e}")
 
 
 def _call_openai(model: str, messages: List[Dict[str, str]], system_prompt: str | None) -> str:  # noqa: D401
