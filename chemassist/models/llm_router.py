@@ -71,8 +71,9 @@ def call_llm(
                 groq_key = st.secrets.get("GROQ_API_KEY")
             if not openai_key:
                 openai_key = st.secrets.get("OPENAI_API_KEY")
-        except Exception:
-            pass  # Streamlit secrets not available
+        except Exception as e:
+            # Streamlit secrets not available or not configured
+            pass
     
     if groq_key:
         # Temporarily set the environment variable for the API call

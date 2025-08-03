@@ -33,6 +33,12 @@ In your Streamlit Cloud app settings:
    GROQ_API_KEY = "gsk_your_actual_api_key_here"
    ```
 
+**Alternative:** Create `.streamlit/secrets.toml` in your repository:
+```toml
+GROQ_API_KEY = "gsk_your_actual_api_key_here"
+```
+**Note:** This file should be in `.gitignore` to avoid committing API keys.
+
 ## 🔧 Environment Variable Configuration
 
 ### Local Development
@@ -104,6 +110,16 @@ python3 test_api_key.py YOUR_API_KEY
 - Check Streamlit Cloud secrets configuration
 - Verify API key format (Groq: `gsk_...`, OpenAI: `sk-...`)
 - Restart the app after adding secrets
+
+### "No secrets files found" error
+- Create `.streamlit/secrets.toml` file in your repository root
+- Add your API keys to the secrets file
+- Make sure the file is in the correct location
+
+### "module 'streamlit.components' has no attribute 'v1'" error
+- This is fixed in the latest code (using `st.components.html` instead)
+- Update to the latest version of the code
+- This error occurs with newer Streamlit versions
 
 ### "Module not found" errors
 - Check that all dependencies are in `requirements.txt`

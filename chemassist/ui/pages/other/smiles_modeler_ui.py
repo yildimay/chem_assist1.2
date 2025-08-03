@@ -48,7 +48,7 @@ def _display_3d_interactive(html_content: str, title: str) -> None:
     """Display interactive 3D HTML content in Streamlit."""
     if html_content:
         st.markdown(f"**{title}**")
-        st.components.v1.html(html_content, height=450, scrolling=False)
+        st.components.html(html_content, height=450, scrolling=False)
     else:
         st.warning(f"No interactive {title.lower()} available")
 
