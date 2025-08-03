@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """SMILES to 3D Modeler UI - Convert SMILES strings to molecular structures.
 
+Based on the original implementation from chemassist_platform.
 Features:
     • 2D molecular visualization (inline display)
-    • 3D molecular visualization (inline display + interactive viewer)
+    • 3D molecular visualization (using 3Dmol.js)
     • XYZ coordinate file generation
     • Download functionality for essential formats only
 """
@@ -15,6 +16,9 @@ from typing import Optional
 
 try:
     from rdkit import Chem
+    from rdkit.Chem import AllChem, Draw, MolToMolBlock
+    from rdkit.Chem.rdmolfiles import MolToXYZBlock
+    import streamlit.components.v1 as components
     RDKIT_AVAILABLE = True
 except ImportError:
     RDKIT_AVAILABLE = False
@@ -36,51 +40,34 @@ def _create_download_button(content: str, filename: str, mime_type: str, button_
             key=f"download_{filename}"
         )
 
-def _display_svg(svg_content: str, title: str) -> None:
-    """Display SVG content in Streamlit."""
-    if svg_content:
-        st.markdown(f"**{title}**")
-        st.markdown(svg_content, unsafe_allow_html=True)
-    else:
-        st.warning(f"No {title.lower()} available")
+def render_2d_molecule(mol):
+    """Render 2D molecule using RDKit."""
+    img = Draw.MolToImage(mol, size=(300, 300))
+    st.image(img, use_column_width=False)
 
-def _display_3d_interactive(html_content: str, title: str) -> None:
-    """Display interactive 3D HTML content in Streamlit."""
-    if html_content:
-        st.markdown(f"**{title}**")
-        
-        # Create a temporary HTML file and display it
-        import tempfile
-        import base64
-        
-        try:
-            # Encode HTML content for iframe
-            html_encoded = base64.b64encode(html_content.encode()).decode()
-            
-            # Display using iframe with data URI
-            st.markdown(f"""
-            <iframe src="data:text/html;base64,{html_encoded}" 
-                    width="100%" height="450" frameborder="0" 
-                    style="border: 1px solid #ddd; border-radius: 5px;">
-            </iframe>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("*💡 **Tip:** Drag to rotate, scroll to zoom, right-click for more options*")
-            
-        except Exception as e:
-            st.error(f"Failed to display 3D viewer: {e}")
-            # Fallback to static 3D SVG
-            st.markdown("**Fallback: Static 3D Structure**")
-            st.markdown(html_content, unsafe_allow_html=True)
-    else:
-        st.warning(f"No interactive {title.lower()} available")
+def render_3d_molecule(mol_block: str):
+    """Render 3D molecule using 3Dmol.js."""
+    html = f"""
+        <div id="viewer" style="width:100%;height:400px;"></div>
+        <script src="https://3Dmol.org/build/3Dmol.js"></script>
+        <script>
+          const viewer = $3Dmol.createViewer(
+              "viewer", {{backgroundColor: "white"}}
+          );
+          viewer.addModel(`{mol_block}`, "mol");
+          viewer.setStyle({{}}, {{stick:{{}}}});
+          viewer.zoomTo();
+          viewer.render();
+        </script>
+    """
+    components.html(html, height=420, scrolling=False)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Main page
 # ──────────────────────────────────────────────────────────────────────────────
 
 def show_page() -> None:  # noqa: D401
-    st.header("🧬 SMILES → 3D Modeler")
+    st.header("🧬 SMILES → Molecule Visualizer")
     st.markdown(
         "Convert SMILES strings into molecular structures. Generate 2D and 3D "
         "visualizations, plus XYZ coordinate files for computational chemistry."
@@ -97,12 +84,13 @@ def show_page() -> None:  # noqa: D401
     with col1:
         smiles_input = st.text_input(
             "SMILES String",
+            value="C1=CC=CC=C1",  # Default benzene like original
             placeholder="C1=CC=CC=C1 (benzene), CC(=O)O (acetic acid), etc.",
             help="Enter a valid SMILES string to generate molecular structures"
         )
     
     with col2:
-        process_button = st.button("Generate Structures", type="primary")
+        process_button = st.button("Show", type="primary")
     
     # Example SMILES
     with st.expander("💡 Example SMILES"):
@@ -166,23 +154,28 @@ def show_page() -> None:  # noqa: D401
                 num_bonds = structure.mol_2d.GetNumBonds()
                 st.metric("Bonds", num_bonds)
         
-        # Three sections for different outputs
-        tab_2d, tab_3d, tab_xyz = st.tabs(["🖼️ 2D Structure", "🎯 3D Structure", "📄 XYZ Coordinates"])
+        # Mode selection like original
+        st.subheader("🧪 SMILES → MOL Visualization")
+        mode = st.radio("Display Mode", ("2D", "3D", "XYZ Coordinates"))
         
-        # Tab 1: 2D Structure
-        with tab_2d:
+        if mode == "2D":
             st.markdown("**2D molecular visualization**")
-            
-            if structure.svg_2d:
+            if structure.mol_2d:
+                render_2d_molecule(structure.mol_2d)
+                
+                # Download options
                 col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    _display_svg(structure.svg_2d, "2D Molecular Structure")
-                
                 with col2:
                     st.markdown("**Download Options**")
+                    # Generate SVG for download
+                    from rdkit.Chem.Draw import rdMolDraw2D
+                    drawer = rdMolDraw2D.MolDraw2DSVG(400, 400)
+                    drawer.DrawMolecule(structure.mol_2d)
+                    drawer.FinishDrawing()
+                    svg_content = drawer.GetDrawingText()
+                    
                     _create_download_button(
-                        structure.svg_2d,
+                        svg_content,
                         "molecule_2d.svg",
                         "image/svg+xml",
                         "📥 Download 2D SVG"
@@ -190,24 +183,22 @@ def show_page() -> None:  # noqa: D401
             else:
                 st.warning("No 2D structure available")
         
-        # Tab 2: 3D Structure
-        with tab_3d:
+        elif mode == "3D":
             st.markdown("**3D molecular visualization**")
-            
-            if structure.html_3d:
+            if structure.mol_block:
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
-                    _display_3d_interactive(structure.html_3d, "Interactive 3D Molecular Structure")
+                    render_3d_molecule(structure.mol_block)
                     st.markdown("*💡 **Tip:** Drag to rotate, scroll to zoom, right-click for more options*")
                 
                 with col2:
                     st.markdown("**Download Options**")
                     _create_download_button(
-                        structure.svg_3d,
-                        "molecule_3d.svg",
-                        "image/svg+xml",
-                        "📥 Download 3D SVG"
+                        structure.mol_block,
+                        "molecule_3d.mol",
+                        "text/plain",
+                        "📥 Download MOL File"
                     )
                     
                     # Also provide PDB file for 3D structure
@@ -222,10 +213,8 @@ def show_page() -> None:  # noqa: D401
             else:
                 st.warning("No 3D structure available")
         
-        # Tab 3: XYZ Coordinates
-        with tab_xyz:
+        else:  # XYZ Coordinates
             st.markdown("**XYZ coordinate file**")
-            
             if structure.xyz_coords:
                 col1, col2 = st.columns([2, 1])
                 
@@ -253,9 +242,9 @@ def show_page() -> None:  # noqa: D401
             - Suitable for publication and documentation
             
             **3D Structure:**
-            - Interactive three-dimensional visualization
-            - Generated using RDKit's 3D embedding
-            - Optimized using MMFF force field
+            - Interactive three-dimensional visualization using 3Dmol.js
+            - Generated using RDKit's ETKDG embedding
+            - Optimized using UFF force field
             - Includes all hydrogen atoms
             - **Interactive features:** Rotate, zoom, and explore the molecule
             
