@@ -3,10 +3,10 @@ from __future__ import annotations
 """SMILES to 3D Modeler UI - Convert SMILES strings to molecular structures.
 
 Features:
-    • 2D molecular visualization
-    • 3D molecular visualization  
+    • 2D molecular visualization (inline display)
+    • 3D molecular visualization (inline display + interactive viewer)
     • XYZ coordinate file generation
-    • Download functionality for all formats
+    • Download functionality for essential formats only
 """
 
 import io
@@ -43,6 +43,14 @@ def _display_svg(svg_content: str, title: str) -> None:
         st.markdown(svg_content, unsafe_allow_html=True)
     else:
         st.warning(f"No {title.lower()} available")
+
+def _display_3d_interactive(html_content: str, title: str) -> None:
+    """Display interactive 3D HTML content in Streamlit."""
+    if html_content:
+        st.markdown(f"**{title}**")
+        st.components.v1.html(html_content, height=450, scrolling=False)
+    else:
+        st.warning(f"No interactive {title.lower()} available")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Main page
@@ -143,7 +151,7 @@ def show_page() -> None:  # noqa: D401
             st.markdown("**2D molecular visualization**")
             
             if structure.svg_2d:
-                col1, col2 = st.columns([2, 1])
+                col1, col2 = st.columns([3, 1])
                 
                 with col1:
                     _display_svg(structure.svg_2d, "2D Molecular Structure")
@@ -156,14 +164,6 @@ def show_page() -> None:  # noqa: D401
                         "image/svg+xml",
                         "📥 Download 2D SVG"
                     )
-                    
-                    # Also provide SMILES as text
-                    _create_download_button(
-                        structure.smiles,
-                        "molecule.smiles",
-                        "text/plain",
-                        "📥 Download SMILES"
-                    )
             else:
                 st.warning("No 2D structure available")
         
@@ -171,11 +171,12 @@ def show_page() -> None:  # noqa: D401
         with tab_3d:
             st.markdown("**3D molecular visualization**")
             
-            if structure.svg_3d:
-                col1, col2 = st.columns([2, 1])
+            if structure.html_3d:
+                col1, col2 = st.columns([3, 1])
                 
                 with col1:
-                    _display_svg(structure.svg_3d, "3D Molecular Structure")
+                    _display_3d_interactive(structure.html_3d, "Interactive 3D Molecular Structure")
+                    st.markdown("*💡 **Tip:** Drag to rotate, scroll to zoom, right-click for more options*")
                 
                 with col2:
                     st.markdown("**Download Options**")
@@ -186,14 +187,14 @@ def show_page() -> None:  # noqa: D401
                         "📥 Download 3D SVG"
                     )
                     
-                    # Provide 3D SMILES if available
-                    if structure.mol_3d and RDKIT_AVAILABLE:
-                        mol_3d_smiles = Chem.MolToSmiles(structure.mol_3d)
+                    # Also provide PDB file for 3D structure
+                    if structure.mol_3d:
+                        pdb_content = Chem.MolToPDBBlock(structure.mol_3d)
                         _create_download_button(
-                            mol_3d_smiles,
-                            "molecule_3d.smiles",
+                            pdb_content,
+                            "molecule_3d.pdb",
                             "text/plain",
-                            "📥 Download 3D SMILES"
+                            "📥 Download PDB File"
                         )
             else:
                 st.warning("No 3D structure available")
@@ -217,16 +218,6 @@ def show_page() -> None:  # noqa: D401
                         "text/plain",
                         "📥 Download XYZ File"
                     )
-                    
-                    # Also provide as .gjf for Gaussian
-                    if structure.xyz_coords:
-                        gjf_content = _create_gaussian_input(structure)
-                        _create_download_button(
-                            gjf_content,
-                            "molecule.gjf",
-                            "text/plain",
-                            "📥 Download Gaussian Input"
-                        )
             else:
                 st.warning("No XYZ coordinates available")
         
@@ -239,10 +230,11 @@ def show_page() -> None:  # noqa: D401
             - Suitable for publication and documentation
             
             **3D Structure:**
-            - Three-dimensional conformation
+            - Interactive three-dimensional visualization
             - Generated using RDKit's 3D embedding
             - Optimized using MMFF force field
             - Includes all hydrogen atoms
+            - **Interactive features:** Rotate, zoom, and explore the molecule
             
             **XYZ Coordinates:**
             - Cartesian coordinates for all atoms

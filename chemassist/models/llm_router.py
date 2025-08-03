@@ -59,10 +59,46 @@ def call_llm(
 ) -> str:  # noqa: D401
     """Dispatch to Groq or OpenAI depending on available API keys."""
 
-    if "GROQ_API_KEY" in os.environ:
-        return _call_groq(model or "llama3-70b-8192", messages, system_prompt)
-    if "OPENAI_API_KEY" in os.environ:
-        return _call_openai(model or MODEL_FALLBACK, messages, system_prompt)
+    # Try to get API keys from environment variables or Streamlit secrets
+    groq_key = os.environ.get("GROQ_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    
+    # Fallback to Streamlit secrets if not in environment
+    if not groq_key or not openai_key:
+        try:
+            import streamlit as st
+            if not groq_key:
+                groq_key = st.secrets.get("GROQ_API_KEY")
+            if not openai_key:
+                openai_key = st.secrets.get("OPENAI_API_KEY")
+        except Exception:
+            pass  # Streamlit secrets not available
+    
+    if groq_key:
+        # Temporarily set the environment variable for the API call
+        original_groq_key = os.environ.get("GROQ_API_KEY")
+        os.environ["GROQ_API_KEY"] = groq_key
+        try:
+            return _call_groq(model or "llama3-70b-8192", messages, system_prompt)
+        finally:
+            # Restore original value
+            if original_groq_key:
+                os.environ["GROQ_API_KEY"] = original_groq_key
+            else:
+                os.environ.pop("GROQ_API_KEY", None)
+    
+    if openai_key:
+        # Temporarily set the environment variable for the API call
+        original_openai_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = openai_key
+        try:
+            return _call_openai(model or MODEL_FALLBACK, messages, system_prompt)
+        finally:
+            # Restore original value
+            if original_openai_key:
+                os.environ["OPENAI_API_KEY"] = original_openai_key
+            else:
+                os.environ.pop("OPENAI_API_KEY", None)
 
-    raise RuntimeError("No LLM API key found – set GROQ_API_KEY or OPENAI_API_KEY")
+    raise RuntimeError("No LLM API key found – set GROQ_API_KEY or OPENAI_API_KEY in environment or Streamlit secrets")
 
