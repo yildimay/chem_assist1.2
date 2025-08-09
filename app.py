@@ -36,7 +36,7 @@ if not os.environ.get("GROQ_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
 
 CATEGORY = st.sidebar.radio(
     "Tool category",
-    ("DFT", "Molecular Dynamics", "Other"),
+    ("DFT", "Molecular Dynamics", "Molecule Builder"),
     key="category",
 )
 
@@ -48,8 +48,7 @@ PAGE_REGISTRY: dict[tuple[str, str], str] = {
     ("Molecular Dynamics", "Input Creator"): "chemassist.ui.pages.md.input_creator_ui",
     ("Molecular Dynamics", "Error Fixer"):   "chemassist.ui.pages.md.error_fixer_ui",
 
-    ("Other", "Environmental Risk Calculator"): "chemassist.ui.pages.other.env_risk_ui",
-    ("Other", "SMILES → 3D Modeler"):           "chemassist.ui.pages.other.smiles_modeler_ui",
+    ("Molecule Builder", "SMILES → 3D Modeler"): "chemassist.ui.pages.other.smiles_modeler_ui",
 }
 
 if CATEGORY == "DFT":
@@ -66,11 +65,11 @@ elif CATEGORY == "Molecular Dynamics":
         key="md_tool",
     )
 
-else:  # Other
+else:  # Molecule Builder
     TOOL = st.sidebar.radio(
-        "Misc tools",
-        ("Environmental Risk Calculator", "SMILES → 3D Modeler"),
-        key="misc_tool",
+        "Molecule Builder",
+        ("SMILES → 3D Modeler",),
+        key="builder_tool",
     )
 
 # ─────────────────────────────────────────────────────────────
