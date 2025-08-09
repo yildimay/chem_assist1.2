@@ -2,18 +2,14 @@ from __future__ import annotations
 
 """MD • Error Fixer UI
 
-Upload:
-  • original .mdp file
-  • matching .log / .out file
-
-The page calls :pyfunc:`chemassist.core.md.error_fixer.fix_md_input` which
-invokes the LLM router under the hood.  On success it displays the
-problem diagnosis and offers the corrected .mdp for download.
+Interactive chat interface for GROMACS error fixing, matching the DFT chat UX.
 """
 
 import streamlit as st
-from chemassist.core.md.error_fixer import fix_md_input, analyze_md_log
-from chemassist.utils.file_io import create_md_error_fix_zip_archive
+import requests
+import os
+from PIL import Image
+import pytesseract
 
 # ───────────────────────────────────────────────────────────────
 # Streamlit page
@@ -21,250 +17,156 @@ from chemassist.utils.file_io import create_md_error_fix_zip_archive
 
 def show_page() -> None:  # noqa: D401
     st.header("🚑 MD • Error Fixer")
-    st.write("Upload your broken GROMACS .mdp file and the corresponding .log file; ChemAssist will diagnose and propose a fix.")
+    show_chat_mode()
 
-    with st.expander("📖 Instructions", expanded=False):
-        st.markdown(
-            """
-            **This tool helps with:**
-            - GROMACS parameter errors
-            - Simulation crashes
-            - Performance issues
-            - File format problems
-            
-            **Upload files:**
-            - **MDP file** – your .mdp parameter file
-            - **Log file** – the .log/.out file with error messages
-            
-            **Supported stages:**
-            - Energy minimization (em)
-            - NVT equilibration (nvt)
-            - NPT equilibration (npt)
-            - Production MD (md)
-            
-            **The tool will:**
-            1. Analyze the error in your log file
-            2. Identify the problem in your .mdp file
-            3. Generate a corrected .mdp file
-            4. Provide detailed diagnosis and suggestions
-            """
+
+def show_chat_mode() -> None:
+    """Show the chat interface mode for GROMACS MD error fixing."""
+    st.markdown(
+        "Welcome to the **GROMACS Error Fixer Chat**.\n"
+        "- Describe your MD issue in the chatbox below.\n"
+        "- Optionally, upload a screenshot of the error.\n"
+        "- Optionally, upload a GROMACS `.mdp` and/or `.log`/`.out` file.\n\n"
+        "**Note**: Text input is required. Other inputs are optional."
+    )
+
+    # Initialize chat history (MD-specific)
+    if "md_chat_messages" not in st.session_state:
+        st.session_state.md_chat_messages = []
+
+    # Display chat history
+    for msg in st.session_state.md_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # User input and uploads
+    with st.form("md_chat_form"):
+        user_input = st.text_area(
+            "Describe your GROMACS MD error:",
+            height=100,
+            placeholder="e.g. LINCS warnings, PME errors, segmentation fault...",
         )
-
-    # ───────────────────────────────────────────────────────────────
-    # File upload section
-    # ───────────────────────────────────────────────────────────────
-
-    st.subheader("📁 Upload Files")
-    
-    col_mdp, col_log = st.columns(2)
-    with col_mdp:
-        mdp_file = st.file_uploader("MDP file (.mdp)", type=["mdp", "txt"])
-    with col_log:
-        log_file = st.file_uploader("Log file (.log, .out)", type=["log", "out", "txt"])
-
-    # ───────────────────────────────────────────────────────────────
-    # Analysis options
-    # ───────────────────────────────────────────────────────────────
-
-    st.subheader("🔧 Analysis Options")
-    
-    col1, col2 = st.columns(2)
-    with col1:
         stage = st.selectbox(
-            "Simulation Stage",
+            "Simulation Stage (optional)",
             ["md", "em", "nvt", "npt"],
             index=0,
-            help="Select the stage that failed"
+            help="Select the stage related to the issue",
         )
-    
-    with col2:
-        analysis_type = st.radio(
-            "Analysis Type",
-            ["Fix MDP File", "Analyze Log Only"],
-            index=0,
-            help="Choose whether to fix the MDP file or just analyze the log"
+        uploaded_image = st.file_uploader(
+            "Optional: Upload error screenshot",
+            type=["png", "jpg", "jpeg"],
         )
-
-    # ───────────────────────────────────────────────────────────────
-    # Analysis buttons
-    # ───────────────────────────────────────────────────────────────
-
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        fix_button = st.button(
-            "🩹 Fix MDP File", 
-            disabled=not (mdp_file and log_file),
-            help="Analyze and fix the MDP file"
+        uploaded_mdp_file = st.file_uploader(
+            "Optional: Upload GROMACS MDP File (.mdp)",
+            type=["mdp"],
         )
-    with col2:
-        analyze_button = st.button(
-            "📊 Analyze Log Only",
-            disabled=not log_file,
-            help="Just analyze the log file for issues"
+        uploaded_log_file = st.file_uploader(
+            "Optional: Upload GROMACS Log File (.log, .out)",
+            type=["log", "out"],
         )
+        submitted = st.form_submit_button("Send")
 
-    # ───────────────────────────────────────────────────────────────
-    # Process analysis
-    # ───────────────────────────────────────────────────────────────
+    if submitted:
+        if user_input.strip() == "":
+            st.warning("Text input is required.")
+        else:
+            # Save user message
+            st.session_state.md_chat_messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-    if fix_button and mdp_file and log_file:
-        with st.spinner("🤖 AI is analyzing your GROMACS error..."):
+            # Process image if available
+            image_text = ""
+            if uploaded_image is not None:
+                try:
+                    image = Image.open(uploaded_image)
+                    image_text = pytesseract.image_to_string(image)
+                    st.markdown("*Extracted from image:* \n" + image_text)
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Failed to process image: {e}")
+
+            # Read file contents
+            mdp_file_text = ""
+            log_file_text = ""
+
+            if uploaded_mdp_file is not None:
+                try:
+                    mdp_file_text = uploaded_mdp_file.read().decode("utf-8", errors="ignore")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Failed to read MDP file: {e}")
+
+            if uploaded_log_file is not None:
+                try:
+                    log_file_text = uploaded_log_file.read().decode("utf-8", errors="ignore")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Failed to read log file: {e}")
+
+            # Combine and process all inputs
+            final_input = f"""USER MESSAGE:
+{user_input}
+
+IMAGE TEXT:
+{image_text}
+
+MDP FILE:
+{mdp_file_text}
+
+LOG FILE:
+{log_file_text}
+
+STAGE:
+{stage}"""
+
+            # Call Groq API (same approach as DFT chat)
             try:
-                # Reset file pointers
-                mdp_file.seek(0)
-                log_file.seek(0)
-                
-                result = fix_md_input(
-                    mdp_text=mdp_file.read().decode("utf-8", "replace"),
-                    log_text=log_file.read().decode("utf-8", "replace"),
-                    stage=stage,
-                )
-                
-                st.success("✅ Analysis complete!")
-                
-                # Display results
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    st.subheader("🔍 Diagnosis")
-                    st.info(result["diagnosis"] or "(No diagnosis provided)")
-                
-                with col2:
-                    st.subheader("📊 Simulation Stage")
-                    st.info(f"Analyzed as: **{stage.upper()}** stage")
-                
-                # Show corrected MDP
-                st.subheader("✅ Corrected MDP File")
-                st.code(result["fixed_mdp"], language="text")
-                
-                # Download buttons
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.download_button(
-                        label="💾 Download fixed .mdp",
-                        data=result["fixed_mdp"].encode(),
-                        file_name=f"fixed_{stage}.mdp",
-                        mime="text/plain",
-                    )
-                
-                with col2:
-                    # Create a simple comparison
-                    mdp_file.seek(0)
-                    original_mdp = mdp_file.read().decode("utf-8", "replace")
-                    st.download_button(
-                        label="📋 Download comparison",
-                        data=f"ORIGINAL:\n{original_mdp}\n\nFIXED:\n{result['fixed_mdp']}".encode(),
-                        file_name=f"{stage}_comparison.txt",
-                        mime="text/plain",
-                    )
-                
-                with col3:
+                api_key = os.getenv("GROQ_API_KEY")
+                if not api_key:
                     try:
-                        zip_data = create_md_error_fix_zip_archive(
-                            original_mdp, result["fixed_mdp"], result["diagnosis"], stage
-                        )
-                        zip_filename = f"md_error_fix_{stage}.zip"
-                        
-                        st.download_button(
-                            label="📦 Download ZIP",
-                            data=zip_data,
-                            file_name=zip_filename,
-                            mime="application/zip",
-                            help="Download all error fix files as ZIP"
-                        )
-                    except Exception as e:
-                        st.error(f"Failed to create ZIP: {e}")
-                
-                st.success("🎉 MDP file fixed successfully!")
-                
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"❌ Failed to fix MDP file: {exc}")
-                
-                # Show troubleshooting tips
-                with st.expander("🔧 Troubleshooting Tips", expanded=True):
-                    st.markdown("""
-                    **Common issues and solutions:**
-                    
-                    1. **"LLM did not return a FIXED_MDP block"**
-                       - Try the "Analyze Log Only" option first
-                       - Check that your .mdp file is valid GROMACS format
-                       - Make sure your .log file contains error messages
-                    
-                    2. **"Invalid API Key"**
-                       - Make sure you're running with: `./launch.sh YOUR_API_KEY`
-                       - Get a free API key from: https://console.groq.com/
-                    
-                    3. **"No response from LLM"**
-                       - Check your internet connection
-                       - Try again in a few moments
-                    
-                    4. **Still having issues?**
-                       - Try uploading a smaller log file (just the error part)
-                       - Make sure your .mdp file is complete
-                       - Check that the simulation stage is correct
-                    """)
+                        api_key = st.secrets.get("GROQ_API_KEY")
+                    except Exception:  # noqa: BLE001
+                        pass
 
-    elif analyze_button and log_file:
-        with st.spinner("🤖 AI is analyzing your log file..."):
-            try:
-                # Reset file pointer
-                log_file.seek(0)
-                
-                result = analyze_md_log(
-                    log_text=log_file.read().decode("utf-8", "replace")
-                )
-                
-                st.success("✅ Log analysis complete!")
-                
-                # Display results
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    st.subheader("📊 Analysis")
-                    st.info(result["analysis"] or "(No analysis provided)")
-                
-                with col2:
-                    st.subheader("💡 Suggestions")
-                    st.info(result["suggestions"] or "(No suggestions provided)")
-                
-                # Show log preview
-                log_file.seek(0)
-                log_content = log_file.read().decode("utf-8", "replace")
-                st.subheader("📄 Log File Preview (Last 50 lines)")
-                st.code(log_content.splitlines()[-50:], language="text")
-                
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"❌ Failed to analyze log: {exc}")
+                if not api_key:
+                    ai_response = (
+                        "❌ No API key found. Please set GROQ_API_KEY environment variable or add it to Streamlit secrets."
+                    )
+                else:
+                    headers = {
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    }
 
-    # ───────────────────────────────────────────────────────────────
-    # Help section
-    # ───────────────────────────────────────────────────────────────
+                    data = {
+                        "model": "llama3-70b-8192",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are a helpful assistant for GROMACS error fixing. "
+                                    "If the question is not related to GROMACS or MD errors, reply with: "
+                                    "'This tool is specifically for GROMACS error fixing. Please ask a GROMACS-related question.'"
+                                ),
+                            },
+                            {"role": "user", "content": final_input},
+                        ],
+                    }
 
-    if not (mdp_file or log_file):
-        st.info("👆 Upload your .mdp and .log files above to get started")
-        
-        with st.expander("📚 Common GROMACS Errors", expanded=False):
-            st.markdown("""
-            **Frequent GROMACS issues:**
-            
-            **Parameter Errors:**
-            - Negative temperatures or pressures
-            - Invalid cutoff values
-            - Missing required parameters
-            - Incompatible parameter combinations
-            
-            **File Format Issues:**
-            - Missing semicolons in comments
-            - Incorrect parameter names
-            - Extra spaces or characters
-            
-            **Performance Problems:**
-            - Memory allocation failures
-            - Domain decomposition issues
-            - Neighbor list problems
-            
-            **System Issues:**
-            - Box size problems
-            - Atom overlap
-            - Missing topology information
-            """)
+                    response = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions", headers=headers, json=data
+                    )
+                    response.raise_for_status()
+                    ai_response = response.json()["choices"][0]["message"]["content"]
+
+            except Exception as e:  # noqa: BLE001
+                ai_response = f"❌ Error while contacting Groq API: {e}"
+
+            # Save and display AI response
+            st.session_state.md_chat_messages.append({"role": "assistant", "content": ai_response})
+            with st.chat_message("assistant"):
+                st.markdown(ai_response)
+
+    # Clear chat button
+    if st.session_state.md_chat_messages:
+        if st.button("🗑️ Clear Chat History"):
+            st.session_state.md_chat_messages = []
+            st.rerun()
