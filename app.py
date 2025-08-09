@@ -36,7 +36,7 @@ if not os.environ.get("GROQ_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
 
 CATEGORY = st.sidebar.radio(
     "Tool category",
-    ("DFT", "Molecular Dynamics", "Molecule Builder"),
+    ("DFT", "Molecular Dynamics", "Molecule Builder", "About"),
     key="category",
 )
 
@@ -49,6 +49,8 @@ PAGE_REGISTRY: dict[tuple[str, str], str] = {
     ("Molecular Dynamics", "Error Fixer"):   "chemassist.ui.pages.md.error_fixer_ui",
 
     ("Molecule Builder", "SMILES → 3D Modeler"): "chemassist.ui.pages.other.smiles_modeler_ui",
+
+    ("About", "About"): "chemassist.ui.pages.about",
 }
 
 if CATEGORY == "DFT":
@@ -65,12 +67,14 @@ elif CATEGORY == "Molecular Dynamics":
         key="md_tool",
     )
 
-else:  # Molecule Builder
+elif CATEGORY == "Molecule Builder":
     TOOL = st.sidebar.radio(
         "Molecule Builder",
         ("SMILES → 3D Modeler",),
         key="builder_tool",
     )
+else:  # About
+    TOOL = "About"
 
 # ─────────────────────────────────────────────────────────────
 # Dynamic import & execution
