@@ -1,0 +1,18 @@
+{
+  "id": "ch4_b3lyp_def2svp",
+  "metrics": {
+    "scf_energy_hartree": -40.2212345,
+    "lowest_freq_cm1": 130.0
+  },
+  "tolerances": {
+    "scf_energy_hartree": 1e-6,
+    "lowest_freq_cm1": 5.0
+  },
+  "meta": {
+    "method": "B3LYP",
+    "basis": "def2-SVP",
+    "gaussian_version": "G16-C.01"
+  }
+}
+
+

@@ -1,0 +1,7 @@
+integrator = md
+dt = 0.002
+constraints = h-bonds
+tcoupl = V-rescale
+ref_t = 300
+
+

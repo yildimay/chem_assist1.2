@@ -1,0 +1,20 @@
+{
+  "id": "nvt_water_10ps",
+  "metrics": {
+    "avg_temp_K": 300.0,
+    "pressure_bar": 1.0,
+    "ensemble": "NVT"
+  },
+  "tolerances": {
+    "avg_temp_K": 3.0,
+    "pressure_bar": 50.0
+  },
+  "meta": {
+    "integrator": "md",
+    "dt_ps": 0.002,
+    "constraints": "h-bonds",
+    "thermostat": "V-rescale"
+  }
+}
+
+
